@@ -1,40 +1,127 @@
-Rapport de Rétro-Ingénierie : Analyse et Déchiffrement (Task 2)
+Rapport — Tâche 2 : Cryptographie Android — Analyse et Déchiffrement
 
 ## 1. Objectif
 
-Le but de cette mission était d'analyser le mécanisme de protection d'une application Android. Contrairement à la tâche précédente (analyse binaire native), l'objectif ici était d'identifier la logique cryptographique implémentée en Kotlin au sein de l'interface utilisateur, afin de décoder un message chiffré par XOR.
+Extraire un flag caché dans une application Android (app-release-task2.apk) qui utilise un chiffrement XOR basé sur un calcul Fibonacci. Aucun serveur distant n'est impliqué — le chiffrement est entièrement local.
 
-## 2. Méthodologie
+## 2. Étape 1 — Analyse statique du bytecode Java
 
-L'analyse a été conduite par rétro-ingénierie statique sur le code source de l'APK :
+### Décompilation de l'APK
 
-### Identification du point d'entrée
-La classe MainActivityKt contient une méthode performSlowDecryption qui centralise la logique de déchiffrement.
+```bash
+jadx app-release-task2.apk -d task2_jadx
+```
 
-### Analyse de l'algorithme
-- Le texte chiffré est récupéré via un décodage Base64 : `cVZaW1dDQllZTFdRW1xeUlBbX21CWFtHalRZXUJFRFhNX1ZcbllGQ15cUUNSRFpcVks=`
-- La clé est dérivée d'une fonction slowRecursive(150) qui calcule le 150ème terme de la suite de Fibonacci.
-- Le déchiffrement final est effectué par une opération XOR bit-à-bit entre le texte chiffré et la clé générée (appliquée cycliquement).
+### Fichiers pertinents identifiés
 
-### Extraction
-Au lieu d'instrumenter l'application (ce qui aurait été coûteux en ressources à cause de la récursion lente), la logique a été reproduite dans un environnement Python isolé pour calculer la clé et appliquer l'opération XOR inverse.
+- `com/holberton/task3/MainActivityKt.java` — contient toute la logique de déchiffrement
+- `com/holberton/task3/MainActivity.java` — simple lanceur d'interface
 
-## 3. Résultats
+## 3. Étape 2 — Analyse de l'algorithme
 
-Après l'analyse complète du mécanisme cryptographique, le flag a été extrait avec succès.
+Trois fonctions clés dans `MainActivityKt.java`:
 
-**Fonction de clé:** Séquence de Fibonacci F(150)
+### performslowDecryption()
 
-**Méthode de chiffrement:** XOR symétrique avec rotation de clé
+```java
+public static final String performslowDecryption() {
+    byte[] decoded = Base64.getDecoder().decode(
+        "cVZaW1dDQllZTFdRW1xeUlBbX21CWFtHalRZXUJFRFhNX1ZcbllGQ15cUUNSRFpcVks="
+    );
+    return xorDecrypt(new String(decoded, UTF_8), String.valueOf(slowRecursive(150)));
+}
+```
 
-**Flag identifié:** `Holberton{fibonacci_slow_computation_optimization}`
+### slowRecursive(int n) — Fibonacci récursif naïf
 
-## 4. Conclusion
+```java
+public static final long slowRecursive(int i) {
+    return i <= 1 ? i : slowRecursive(i - 1) + slowRecursive(i - 2);
+}
+```
 
-L'analyse a révélé une vulnérabilité majeure liée à une mauvaise gestion de la cryptographie :
+Calcule Fibonacci(150) de façon volontairement lente avec une complexité O(2^n), d'où le nom de la fonction.
 
-- **Réutilisation d'algorithmes faibles** : Le chiffrement XOR, bien qu'efficace pour masquer des données triviales, ne constitue pas une sécurité robuste face à une analyse statique.
+### xorDecrypt(String encryptedFlag, String key)
 
-- **Impact sur les performances** : L'utilisation d'une fonction récursive pour dériver une clé de sécurité impacte négativement l'expérience utilisateur tout en offrant une protection illusoire.
+```java
+public static final String xorDecrypt(String encryptedFlag, String key) {
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < encryptedFlag.length(); i++) {
+        result.append((char) (key.charAt(i % key.length()) ^ encryptedFlag.charAt(i)));
+    }
+    return result.toString();
+}
+```
 
-- **Vulnérabilité fondamentale** : Une fois la logique logicielle isolée, les mécanismes d'obfuscation (comme les suites mathématiques) sont rapidement contournables par un attaquant possédant les compétences en rétro-ingénierie.
+Déchiffre le flag en appliquant une opération XOR caractère par caractère.
+
+## 4. Étape 3 — Déchiffrement
+
+Au lieu d'exécuter l'application lente (récursion naïve), la logique a été réimplémentée en Python:
+
+```python
+import base64
+
+def fib(n):
+    """Calcul optimisé de Fibonacci(n)"""
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+
+# Calcul de la clé
+key = str(fib(150))
+# fib(150) = 9969216677189303386214405760200
+
+# Décodage du ciphertext Base64
+encrypted = base64.b64decode(
+    "cVZaW1dDQllZTFdRW1xeUlBbX21CWFtHalRZXUJFRFhNX1ZcbllGQ15cUUNSRFpcVks="
+).decode('utf-8')
+
+# Déchiffrement XOR
+flag = "".join(
+    chr(ord(key[i % len(key)]) ^ ord(c)) 
+    for i, c in enumerate(encrypted)
+)
+
+print(flag)
+```
+
+## 5. Résultats
+
+**Flag extrait avec succès:**
+```
+Holberton{fibonacci_slow_computation_optimization}
+```
+
+**Valeur de Fibonacci(150):**
+```
+9969216677189303386214405760200
+```
+
+**Ciphertext (Base64):**
+```
+cVZaW1dDQllZTFdRW1xeUlBbX21CWFtHalRZXUJFRFhNX1ZcbllGQ15cUUNSRFpcVks=
+```
+
+## 6. Observations de sécurité
+
+- **Clé dérivable du code source**: La clé de chiffrement est entièrement dérivable à partir du code source — aucun secret externe n'est utilisé.
+
+- **Exécution intentionnellement lente**: La fonction `slowRecursive` est une implémentation Fibonacci récursive naïve en O(2^n), utilisée intentionnellement pour ralentir l'exécution et compliquer l'analyse dynamique.
+
+- **Chiffrement faible**: Le flag est chiffré en XOR avec une clé dérivée du résultat de `fib(150)` converti en string — facilement cassable par analyse statique sans même exécuter l'application.
+
+- **XOR n'est pas sécurisé**: Le chiffrement XOR ne fournit aucune sécurité cryptographique réelle, particulièrement quand la clé est publiquement dérivable.
+
+## 7. Résumé des outils utilisés
+
+| Outil | Usage |
+|-------|-------|
+| jadx | Décompilation du bytecode Java |
+| python3 | Réimplémentation de l'algorithme et déchiffrement |
+
+## 8. Conclusion
+
+Cette analyse démontre que l'obfuscation basée sur des calculs mathématiques complexes (Fibonacci récursif) ne constitue pas une véritable sécurité. L'absence d'outils dynamiques et l'analyse statique pure suffisent à extraire le flag. La réimplémentation Python optimisée du calcul Fibonacci contourne efficacement la tentative de ralentissement intentionnel de l'application.
