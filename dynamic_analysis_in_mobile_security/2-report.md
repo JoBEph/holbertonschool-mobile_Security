@@ -63,29 +63,27 @@ Au lieu d'exécuter l'application lente (récursion naïve), la logique a été 
 ```python
 import base64
 
-def fib(n):
-    """Calcul optimisé de Fibonacci(n)"""
+# 1. Calcul de la clé Fibonacci (150)
+def get_fib(n):
     a, b = 0, 1
     for _ in range(n):
         a, b = b, a + b
     return a
 
-# Calcul de la clé
-key = str(fib(150))
-# fib(150) = 9969216677189303386214405760200
+key = str(get_fib(150))
 
-# Décodage du ciphertext Base64
-encrypted = base64.b64decode(
-    "cVZaW1dDQllZTFdRW1xeUlBbX21CWFtHalRZXUJFRFhNX1ZcbllGQ15cUUNSRFpcVks="
-).decode('utf-8')
+# 2. Décodage Base64
+encoded_flag = "cVZaW1dDQllZTFdRW1xeUlBbX21CWFtHalRZXUJFRFhNX1ZcbllGQ15cUUNSRFpcVks="
+encrypted_bytes = base64.b64decode(encoded_flag).decode('utf-8')
 
-# Déchiffrement XOR
-flag = "".join(
-    chr(ord(key[i % len(key)]) ^ ord(c)) 
-    for i, c in enumerate(encrypted)
-)
+# 3. XOR Decrypt
+flag = ""
+for i in range(len(encrypted_bytes)):
+    # XOR entre le char du texte et le char de la clé (index modulo longueur clé)
+    char_code = ord(encrypted_bytes[i]) ^ ord(key[i % len(key)])
+    flag += chr(char_code)
 
-print(flag)
+print(f"Flag : {flag}")
 ```
 
 ## 5. Résultats
