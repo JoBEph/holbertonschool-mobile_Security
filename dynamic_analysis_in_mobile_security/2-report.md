@@ -27,7 +27,7 @@ Après l'analyse complète du mécanisme cryptographique, le flag a été extrai
 
 **Méthode de chiffrement:** XOR symétrique avec rotation de clé
 
-**Flag identifié:** `Holberton{native_hooking_is_no_different_at_all}`
+**Flag identifié:** `Holberton{fibonacci_slow_computation_optimization}`
 
 ## 4. Conclusion
 
